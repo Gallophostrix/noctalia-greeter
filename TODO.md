@@ -4,15 +4,15 @@
 
 - [ ] Implement the real DRM/KMS + GBM backend for non-debug mode.
 - [ ] Add libinput input handling for the DRM/KMS backend.
-- [ ] Switch the acquired VT into graphics mode and restore text mode on exit.
+- [x] Switch the acquired VT into graphics mode and restore text mode on exit.
 - [ ] Handle compositor/session process lifetime and greeter shutdown cleanly after handoff.
 - [ ] Decide whether failed user sessions should return to the greeter or exit.
 
 ## Authentication And Sessions
 
-- [ ] Keep the PAM handle open through session launch so `pam_close_session` can run correctly.
+- [x] Keep the PAM handle open through session launch so `pam_close_session` can run correctly.
 - [ ] Add PAM conversation support for non-password prompts and expired password flows.
-- [ ] Sanitize `.desktop` `Exec=` commands according to desktop-entry field-code rules.
+- [x] Sanitize `.desktop` `Exec=` commands according to desktop-entry field-code rules.
 - [ ] Add session filtering and ordering that matches common display managers.
 - [ ] Add better error reporting for missing PAM service files, missing sessions, and disabled users.
 
@@ -41,7 +41,7 @@
 ## Quality
 
 - [x] Add unit tests for session discovery and desktop-entry parsing.
-- [ ] Add tests for user enumeration filtering.
+- [x] Add tests for user enumeration filtering.
 - [ ] Add a debug-mode screenshot smoke test.
 - [x] Add clang-format config matching the rest of the Noctalia C++ code.
-- [ ] Add CI build coverage for Meson debug and release builds.
+- [x] Add CI build coverage for Meson debug and release builds.

@@ -6,12 +6,18 @@
 
 namespace noctalia::system {
 
+  bool isLoginCapableUser(uid_t uid, const char* shell) {
+    if (uid < 1000 || shell == nullptr) {
+      return false;
+    }
+    return std::string(shell).find("nologin") == std::string::npos;
+  }
+
   std::vector<User> enumerateUsers() {
     std::vector<User> users;
     setpwent();
     while (passwd* pw = getpwent()) {
-      if (pw->pw_uid < 1000 || pw->pw_shell == nullptr ||
-          std::string(pw->pw_shell).find("nologin") != std::string::npos) {
+      if (!isLoginCapableUser(pw->pw_uid, pw->pw_shell)) {
         continue;
       }
       std::string gecos = pw->pw_gecos != nullptr ? pw->pw_gecos : "";

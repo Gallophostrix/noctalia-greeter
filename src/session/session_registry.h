@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace noctalia::session {
@@ -23,5 +24,8 @@ namespace noctalia::session {
 
   std::vector<Session> discoverSessions();
   std::vector<Session> discoverSessionsFromDirs(const std::vector<SessionSearchDir>& dirs);
+
+  // Strips desktop-entry Exec field codes (%f, %u, %k, …) before session launch.
+  [[nodiscard]] std::string sanitizeSessionExec(std::string_view exec);
 
 } // namespace noctalia::session

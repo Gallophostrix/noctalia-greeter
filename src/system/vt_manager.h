@@ -11,7 +11,10 @@ namespace noctalia::system {
     int vtNumber() const { return m_vtNumber; }
 
   private:
+    void setGraphicsMode(bool graphics);
+
     int m_ttyFd = -1;
+    int m_vtFd = -1;
     int m_previousVt = -1;
     int m_vtNumber = -1;
     bool m_debug = false;

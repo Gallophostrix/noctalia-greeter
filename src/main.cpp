@@ -114,15 +114,16 @@ int main(int argc, char** argv) {
       }
 
       noctalia::auth::PamAuthenticator pam;
-      auto pamResult = pam.authenticate(userIt->name, request.password);
-      if (!pamResult.ok) {
-        view.setStatus("Authentication failed: " + pamResult.error);
+      noctalia::auth::PamSession pamSession = pam.openSession(userIt->name, request.password);
+      if (!pamSession.valid()) {
+        view.setStatus("Authentication failed: " + pam.lastError());
         return;
       }
 
       view.setStatus("Authenticated", true);
       noctalia::session::SessionLauncher launcher;
-      (void)launcher.launch(*userIt, *sessionIt, pamResult.environment, options.debug);
+      (void)launcher.launch(*userIt, *sessionIt, pamSession.environment(), options.debug);
+      pamSession.close();
     });
   }
   return 0;

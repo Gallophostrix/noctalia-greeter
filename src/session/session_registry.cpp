@@ -5,6 +5,34 @@
 #include <sstream>
 
 namespace noctalia::session {
+  std::string sanitizeSessionExec(std::string_view exec) {
+    std::string result;
+    result.reserve(exec.size());
+    for (std::size_t i = 0; i < exec.size(); ++i) {
+      if (exec[i] == '%' && i + 1 < exec.size()) {
+        const char next = exec[i + 1];
+        if (next == 'f' || next == 'F' || next == 'u' || next == 'U' || next == 'd' || next == 'D' || next == 'n' ||
+            next == 'N' || next == 'i' || next == 'c' || next == 'k') {
+          ++i;
+          if (i + 1 < exec.size() && exec[i + 1] == ' ') {
+            ++i;
+          }
+          continue;
+        }
+        if (next == '%') {
+          result += '%';
+          ++i;
+          continue;
+        }
+      }
+      result += exec[i];
+    }
+    while (!result.empty() && result.back() == ' ') {
+      result.pop_back();
+    }
+    return result;
+  }
+
   namespace {
     std::string trim(std::string value) {
       const auto first = value.find_first_not_of(" \t\r\n");
@@ -62,6 +90,10 @@ namespace noctalia::session {
           }
         }
         if (!hidden && !noDisplay && !session.exec.empty()) {
+          session.exec = sanitizeSessionExec(session.exec);
+          if (session.exec.empty()) {
+            continue;
+          }
           if (session.name.empty()) {
             session.name = session.id;
           }

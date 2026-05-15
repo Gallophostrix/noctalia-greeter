@@ -107,6 +107,16 @@ input_control_test = executable('input-control-test',
 
 test('input control', input_control_test)
 
+user_registry_test = executable('user-registry-test',
+  files(
+    'tests/user_registry_test.cpp',
+    'src/system/user_registry.cpp',
+  ),
+  include_directories: include_directories('src'),
+)
+
+test('user registry', user_registry_test)
+
 install_data('data/pam/noctalia-greeter', install_dir: '/etc/pam.d')
 install_subdir('assets/fonts', install_dir: get_option('datadir') / 'noctalia-greeter')
 install_data('assets/noctalia.svg', install_dir: get_option('datadir') / 'noctalia-greeter')

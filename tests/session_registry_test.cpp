@@ -1,5 +1,6 @@
 #include "session/session_registry.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -59,6 +60,22 @@ int main() {
   ok &= expect(sessions[0].type == noctalia::session::SessionType::Wayland, "wayland session type is preserved");
   ok &= expect(sessions[1].id == "dwl", "desktop file stem becomes id");
   ok &= expect(sessions[1].exec == "dwl", "Exec value is parsed");
+
+  writeFile(wayland / "fieldcodes.desktop", "[Desktop Entry]\n"
+                                            "Name=Field Codes\n"
+                                            "Exec=niri-session --with %u files %f\n");
+  const auto withCodes = noctalia::session::discoverSessionsFromDirs({
+      {wayland, noctalia::session::SessionType::Wayland},
+  });
+  const auto fieldIt =
+      std::find_if(withCodes.begin(), withCodes.end(), [](const auto& s) { return s.id == "fieldcodes"; });
+  ok &= expect(fieldIt != withCodes.end(), "field-code session is discovered");
+  ok &= expect(fieldIt->exec == "niri-session --with files", "desktop-entry field codes are stripped");
+
+  ok &= expect(noctalia::session::sanitizeSessionExec("echo %% escaped") == "echo % escaped",
+               "double percent becomes single percent");
+  ok &= expect(noctalia::session::sanitizeSessionExec("cmd %k ") == "cmd",
+               "trailing whitespace after field codes is trimmed");
 
   std::filesystem::remove_all(root);
   return ok ? 0 : 1;
