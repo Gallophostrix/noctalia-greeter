@@ -2,6 +2,8 @@
 
 #include "core/log.h"
 #include "core/resource_paths.h"
+#include "greeter/appearance_config.h"
+#include "greeter/appearance_sync.h"
 #include "greeter/greeter_window.h"
 #include "render/core/texture_manager.h"
 #include "render/render_context.h"
@@ -10,6 +12,7 @@
 #include "render/scene/input_dispatcher.h"
 #include "render/scene/node.h"
 #include "render/scene/rect_node.h"
+#include "render/scene/wallpaper_node.h"
 #include "theme/builtin_palettes.h"
 #include "ui/controls/box.h"
 #include "ui/controls/button.h"
@@ -75,6 +78,14 @@ std::string trim(std::string value) {
   return value.substr(begin, end - begin + 1);
 }
 
+bool parseColorWallpaperPath(std::string_view path, Color &out) {
+  constexpr std::string_view kPrefix = "color:";
+  if (!path.starts_with(kPrefix)) {
+    return false;
+  }
+  return tryParseHexColor(path.substr(kPrefix.size()), out);
+}
+
 std::string sanitizeDesktopExec(const std::string &exec) {
   std::istringstream stream(exec);
   std::string token;
@@ -92,6 +103,10 @@ std::string sanitizeDesktopExec(const std::string &exec) {
 }
 
 std::filesystem::path preferencesPath() {
+  if (greeter::appearance::syncedAppearanceInstalled()) {
+    return greeter::appearance::preferencesPath();
+  }
+
   const char *xdgStateHome = std::getenv("XDG_STATE_HOME");
   if (xdgStateHome != nullptr && xdgStateHome[0] != '\0') {
     return std::filesystem::path(xdgStateHome) / "noctalia-greeter" /
@@ -109,8 +124,13 @@ std::filesystem::path preferencesPath() {
 GreeterSurface::GreeterSurface() = default;
 
 GreeterSurface::~GreeterSurface() {
-  if (m_renderContext != nullptr && m_brandLogoTexture.id != 0) {
-    m_renderContext->textureManager().unload(m_brandLogoTexture);
+  if (m_renderContext != nullptr) {
+    if (m_brandLogoTexture.id != 0) {
+      m_renderContext->textureManager().unload(m_brandLogoTexture);
+    }
+    if (m_wallpaperTexture.id != 0) {
+      m_renderContext->textureManager().unload(m_wallpaperTexture);
+    }
   }
 }
 
@@ -118,12 +138,18 @@ void GreeterSurface::initialize(GreeterWindow &window, RenderContext *context) {
   m_window = &window;
   m_renderContext = context;
 
+  auto wallpaper = std::make_unique<WallpaperNode>();
+  m_wallpaper = wallpaper.get();
+  m_wallpaper->setZIndex(0);
+  m_root.addChild(std::move(wallpaper));
+
   auto backdrop = std::make_unique<RectNode>();
   backdrop->setStyle(RoundedRectStyle{
       .fill = colorForRole(ColorRole::Surface),
       .fillMode = FillMode::Solid,
   });
   m_backdrop = backdrop.get();
+  m_backdrop->setZIndex(1);
   m_root.addChild(std::move(backdrop));
 
   auto title = std::make_unique<Label>();
@@ -353,20 +379,16 @@ void GreeterSurface::initialize(GreeterWindow &window, RenderContext *context) {
 
   loadUsers();
   loadSessions();
-  m_schemeNames.clear();
-  for (const auto &p : noctalia::theme::builtinPalettes()) {
-    m_schemeNames.emplace_back(p.name);
-    if (p.name == "Noctalia") {
-      m_selectedScheme = m_schemeNames.size() - 1;
-    }
-  }
+  buildSchemeNames();
   loadPreferences();
-  if (m_selectedScheme < m_schemeNames.size()) {
-    if (const auto *p = noctalia::theme::findBuiltinPalette(
-            m_schemeNames[m_selectedScheme])) {
-      setPalette(p->dark.palette);
+  if (m_selectedScheme >= m_schemeNames.size()) {
+    if (const auto fallback = findSchemeIndex("Noctalia")) {
+      m_selectedScheme = *fallback;
+    } else {
+      m_selectedScheme = 0;
     }
   }
+  applyScheme(m_selectedScheme);
   refreshSelectionLabels();
   m_passwordVisible = false;
 
@@ -553,6 +575,7 @@ void GreeterSurface::prepareFrame(bool /*needsUpdate*/, bool needsLayout) {
 
   if (needsLayout) {
     m_renderContext->syncContentScale(m_window->renderTarget());
+    syncWallpaperTexture();
     layoutScene(m_window->width(), m_window->height());
   }
 }
@@ -583,13 +606,23 @@ void GreeterSurface::layoutScene(std::uint32_t width, std::uint32_t height) {
 
   m_root.setSize(sw, sh);
 
+  if (m_wallpaper != nullptr) {
+    m_wallpaper->setPosition(0.0f, 0.0f);
+    m_wallpaper->setSize(sw, sh);
+    m_wallpaper->setFillMode(m_wallpaperFillMode);
+    m_wallpaper->setFillColor(m_wallpaperFillColor);
+  }
+
   m_backdrop->setPosition(0.0f, 0.0f);
   m_backdrop->setSize(sw, sh);
   static_cast<RectNode *>(m_backdrop)
       ->setStyle(RoundedRectStyle{
-          .fill = colorForRole(ColorRole::Surface),
+          .fill = m_hasSyncedWallpaper ? colorForRole(ColorRole::Surface, 0.0f)
+                                       : colorForRole(ColorRole::Surface),
           .fillMode = FillMode::Solid,
       });
+  m_backdrop->setVisible(!m_hasSyncedWallpaper ||
+                         m_wallpaperFillColor.a > 0.0f);
 
   const float panelWidth = std::clamp(sw * 0.30f, 420.0f, 520.0f);
   const float rowHeight = Style::controlHeight + Style::spaceSm;
@@ -1121,6 +1154,126 @@ void GreeterSurface::refreshSelectionLabels() {
   }
 }
 
+void GreeterSurface::buildSchemeNames() {
+  m_schemeNames.clear();
+  m_syncedAppearance = loadGreeterSyncedAppearance();
+  if (m_syncedAppearance.has_value()) {
+    m_schemeNames.emplace_back(greeter::appearance::kSyncedSchemeDisplayName);
+    m_selectedScheme = 0;
+  }
+
+  for (const auto &builtinPalette : noctalia::theme::builtinPalettes()) {
+    m_schemeNames.emplace_back(builtinPalette.name);
+    if (!m_syncedAppearance.has_value() && builtinPalette.name == "Noctalia") {
+      m_selectedScheme = m_schemeNames.size() - 1;
+    }
+  }
+}
+
+bool GreeterSurface::isSyncedScheme(const std::size_t schemeIndex) const {
+  return schemeIndex < m_schemeNames.size() &&
+         m_schemeNames[schemeIndex] ==
+             greeter::appearance::kSyncedSchemeDisplayName;
+}
+
+std::optional<std::size_t>
+GreeterSurface::findSchemeIndex(const std::string_view name) const {
+  for (std::size_t i = 0; i < m_schemeNames.size(); ++i) {
+    if (m_schemeNames[i] == name) {
+      return i;
+    }
+  }
+  return std::nullopt;
+}
+
+void GreeterSurface::clearWallpaperDisplay() {
+  m_hasSyncedWallpaper = false;
+  m_wallpaperPath.clear();
+  m_wallpaperFillMode = WallpaperFillMode::Crop;
+  m_wallpaperFillColor = rgba(0.0f, 0.0f, 0.0f, 0.0f);
+  m_wallpaperDirty = true;
+}
+
+void GreeterSurface::applyScheme(const std::size_t schemeIndex) {
+  if (schemeIndex >= m_schemeNames.size()) {
+    return;
+  }
+
+  m_selectedScheme = schemeIndex;
+  if (isSyncedScheme(schemeIndex)) {
+    if (!m_syncedAppearance.has_value()) {
+      m_syncedAppearance = loadGreeterSyncedAppearance();
+    }
+    if (!m_syncedAppearance.has_value()) {
+      if (const auto fallback = findSchemeIndex("Noctalia")) {
+        applyScheme(*fallback);
+      }
+      return;
+    }
+
+    setPalette(m_syncedAppearance->palette);
+    m_wallpaperPath = m_syncedAppearance->wallpaperPath;
+    m_wallpaperFillMode = m_syncedAppearance->wallpaperFillMode;
+    m_wallpaperFillColor = m_syncedAppearance->wallpaperFillColor;
+    m_hasSyncedWallpaper = !m_wallpaperPath.empty();
+    m_wallpaperDirty = true;
+    return;
+  }
+
+  if (const auto *builtinPalette =
+          noctalia::theme::findBuiltinPalette(m_schemeNames[schemeIndex])) {
+    setPalette(builtinPalette->dark.palette);
+  }
+  clearWallpaperDisplay();
+}
+
+void GreeterSurface::syncWallpaperTexture() {
+  if (!m_wallpaperDirty || m_wallpaper == nullptr ||
+      m_renderContext == nullptr) {
+    return;
+  }
+
+  if (m_wallpaperTexture.id != 0) {
+    m_renderContext->textureManager().unload(m_wallpaperTexture);
+    m_wallpaperTexture = {};
+  }
+
+  Color color;
+  if (parseColorWallpaperPath(m_wallpaperPath, color)) {
+    m_wallpaper->setSources(WallpaperSourceKind::Color, {}, color,
+                            WallpaperSourceKind::Color, {}, color, 0.0f, 0.0f,
+                            0.0f, 0.0f);
+    m_wallpaper->setTransition(WallpaperTransition::Fade, 0.0f,
+                               TransitionParams{});
+    m_wallpaper->setFillMode(m_wallpaperFillMode);
+    m_wallpaper->setFillColor(m_wallpaperFillColor);
+  } else if (!m_wallpaperPath.empty()) {
+    std::error_code ec;
+    if (std::filesystem::is_regular_file(m_wallpaperPath, ec) && !ec) {
+      m_wallpaperTexture = m_renderContext->textureManager().loadFromFile(
+          m_wallpaperPath, 0, true);
+      if (m_wallpaperTexture.id != 0) {
+        m_wallpaper->setTextures(m_wallpaperTexture.id, {},
+                                 static_cast<float>(m_wallpaperTexture.width),
+                                 static_cast<float>(m_wallpaperTexture.height),
+                                 0.0f, 0.0f);
+        m_wallpaper->setTransition(WallpaperTransition::Fade, 0.0f,
+                                   TransitionParams{});
+        m_wallpaper->setFillMode(m_wallpaperFillMode);
+        m_wallpaper->setFillColor(m_wallpaperFillColor);
+      } else {
+        m_wallpaper->setTextures({}, {}, 0.0f, 0.0f, 0.0f, 0.0f);
+      }
+    } else {
+      m_wallpaper->setTextures({}, {}, 0.0f, 0.0f, 0.0f, 0.0f);
+    }
+  } else {
+    m_wallpaper->setTextures({}, {}, 0.0f, 0.0f, 0.0f, 0.0f);
+  }
+
+  m_wallpaperDirty = false;
+}
+
 void GreeterSurface::loadPreferences() {
   const auto path = preferencesPath();
   std::error_code ec;
@@ -1541,11 +1694,7 @@ void GreeterSurface::rebuildSchemeMenu() {
       if (data.button != BTN_LEFT || i >= m_schemeNames.size()) {
         return;
       }
-      m_selectedScheme = i;
-      if (const auto *p =
-              noctalia::theme::findBuiltinPalette(m_schemeNames[i])) {
-        setPalette(p->dark.palette);
-      }
+      applyScheme(i);
       refreshSelectionLabels();
       savePreferences();
       m_schemeMenuOpen = false;

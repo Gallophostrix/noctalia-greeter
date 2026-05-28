@@ -146,6 +146,8 @@ _greeter_sources = files(
   'src/theme/builtin_palettes.cpp',
   'src/ui/style.cpp',
   'src/greetd/greetd_client.cpp',
+  'src/greeter/appearance_sync.cpp',
+  'src/greeter/appearance_config.cpp',
   'src/greeter/greeter_surface.cpp',
   'src/greeter/greeter_window.cpp',
   'src/greeter/greeter.cpp',
@@ -200,4 +202,27 @@ install_data(
   'scripts/noctalia-greeter-session',
   install_dir: get_option('bindir'),
   install_mode: 'rwxr-xr-x',
+)
+
+_apply_appearance_sources = files(
+  'src/core/log.cpp',
+  'src/greeter/appearance_sync.cpp',
+  'src/tools/apply_appearance_main.cpp',
+)
+
+_greeter_tools_inc = include_directories('src')
+
+executable('noctalia-greeter-apply-appearance',
+  sources: _apply_appearance_sources,
+  dependencies: [nlohmann_dep],
+  include_directories: _greeter_tools_inc,
+  cpp_args: [
+    '-Wall', '-Wextra', '-Wpedantic', '-Wconversion', '-Wshadow',
+  ],
+  install: true,
+)
+
+install_data(
+  'data/org.noctalia.greeter.apply-appearance.policy',
+  install_dir: get_option('datadir') / 'polkit-1' / 'actions',
 )

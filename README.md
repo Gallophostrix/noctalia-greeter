@@ -69,7 +69,7 @@ just build
 just install
 ```
 
-This installs the greeter binary and session launcher, then runs system setup:
+This installs the greeter binaries, session launcher, polkit policy, and assets, then runs system setup:
 
 - `scripts/setup_greetd_pam.sh`
 - `scripts/setup_greeter_system.sh`
@@ -92,6 +92,49 @@ If your install prefix is different, use the installed path for `noctalia-greete
 sudo systemctl restart greetd
 # or
 sudo sv restart greetd
+```
+
+---
+
+## Packaging
+
+Meson installs the following (paths use your `prefix`, commonly `/usr/local`):
+
+| Artifact | Install location | Role |
+|----------|------------------|------|
+| `noctalia-greeter` | `bindir` | Login UI (Wayland client under Cage) |
+| `noctalia-greeter-session` | `bindir` | greetd session command (`cage` + greeter) |
+| `noctalia-greeter-apply-appearance` | `bindir` | Root helper for shell → greeter appearance sync |
+| `assets/` | `share/noctalia-greeter/assets` | Fonts, icons, etc. |
+| `org.noctalia.greeter.apply-appearance.policy` | `share/polkit-1/actions` | polkit rule for the sync helper |
+
+**Runtime state** (created by setup scripts and the sync helper):
+
+- `/var/lib/noctalia-greeter/` — greeter-owned appearance data (`appearance.json`, optional `wallpaper.*`)
+- `/var/log/noctalia-greeter.log`, `/var/lib/noctalia-greeter/greeter.log` — logs (see `just setup-log-dir`)
+
+**Environment overrides** (optional):
+
+- `NOCTALIA_GREETER_STATE_DIR` — override appearance install directory (default `/var/lib/noctalia-greeter`)
+- `GREETER_USER` — account that owns state files (default `greeter`)
+- `NOCTALIA_GREETER_ASSETS_DIR` — asset root when not using the installed `share/noctalia-greeter/assets` tree
+
+### Appearance sync (Noctalia Shell v5)
+
+Appearance sync is only supported with **[Noctalia Shell v5](https://github.com/noctalia-dev/noctalia-shell/tree/v5)** (the `v5` branch). Older shell releases do not include the settings control or staging flow.
+
+From **Settings → Shell → Security → Noctalia Greeter → Sync Now**, the shell:
+
+1. Stages `appearance.json` (and a wallpaper file when needed) under the user’s `$XDG_RUNTIME_DIR/noctalia-greeter-sync/`
+2. Runs `pkexec noctalia-greeter-apply-appearance <staging-dir>` (admin prompt via polkit)
+3. Installs into `/var/lib/noctalia-greeter/` with mode `0644` / directory `0755`, owned by `greeter`
+
+The greeter reads `appearance.json` on startup and adds a **Synced** entry to the color-scheme picker (built-in palettes keep solid backgrounds). Each successful sync also writes `/var/lib/noctalia-greeter/state.json` with `"scheme_name": "Synced"` so the greeter defaults to that scheme on the next login (session choice is preserved when already set). **Both packages must be installed** (shell v5 + greeter + polkit policy). After syncing, restart greetd or log out once to see the shell wallpaper and palette.
+
+Manual test of the helper (as root), after staging a directory:
+
+```bash
+sudo ./build/noctalia-greeter-apply-appearance /run/user/1000/noctalia-greeter-sync
 ```
 
 ---
