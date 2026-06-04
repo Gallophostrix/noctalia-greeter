@@ -1,82 +1,143 @@
-# Noctalia Greeter
+Noctalia Greeter
+===
 
-**_quiet by design_**
+A minimal login greeter for [greetd](https://github.com/kennylevinsen/greetd) that matches the look and feel of [Noctalia Shell](https://github.com/noctalia-dev/noctalia-shell).
 
+<p><br/></p>
 
 <p align="center">
   <img src="https://assets.noctalia.dev/noctalia-logo.svg?v=2" alt="Noctalia Logo" style="width: 192px" />
 </p>
- 
- 
- 
- 
 
----
+<p><br/></p>
+
+<p align="center">
+  <a href="https://github.com/noctalia-dev/noctalia-greeter/commits">
+    <img src="https://img.shields.io/github/last-commit/noctalia-dev/noctalia-greeter?style=for-the-badge&labelColor=0C0D11&color=A8AEFF&logo=git&logoColor=FFFFFF&label=commit" alt="Last commit" />
+  </a>
+  <a href="https://github.com/noctalia-dev/noctalia-greeter/stargazers">
+    <img src="https://img.shields.io/github/stars/noctalia-dev/noctalia-greeter?style=for-the-badge&labelColor=0C0D11&color=A8AEFF&logo=github&logoColor=FFFFFF" alt="GitHub stars" />
+  </a>
+  <a href="https://docs.noctalia.dev">
+    <img src="https://img.shields.io/badge/docs-A8AEFF?style=for-the-badge&logo=gitbook&logoColor=FFFFFF&labelColor=0C0D11" alt="Documentation" />
+  </a>
+  <a href="https://discord.noctalia.dev">
+    <img src="https://img.shields.io/badge/discord-A8AEFF?style=for-the-badge&labelColor=0C0D11&logo=discord&logoColor=FFFFFF" alt="Discord" />
+  </a>
+</p>
 
 ## What is Noctalia Greeter?
 
-A minimal, modern login greeter for [greetd](https://github.com/kennylevinsen/greetd), designed to match the Noctalia look and feel.
+Noctalia Greeter is the screen you see before your desktop session starts. It lets you pick a user, enter your password, choose a Wayland session, and pick a color scheme - with the same visual language as Noctalia Shell.
 
-It runs as a Wayland client inside [Cage](https://github.com/cage-kiosk/cage), uses the same UI/theming stack as [Noctalia Shell](https://github.com/noctalia-dev/noctalia-shell), and focuses on a clean, reliable authentication flow.
+It is built for **greetd**: greetd starts a small Wayland compositor ([Cage](https://github.com/cage-kiosk/cage)), and the greeter runs inside that session. It is a login UI only, not a desktop shell or compositor.
 
----
+Pair it with **[Noctalia Shell v5](https://github.com/noctalia-dev/noctalia-shell/tree/v5)** if you want wallpaper and palette synced from the shell settings (optional).
 
-## 📋 Requirements
+## Dependencies
 
-- `greetd`
-- `cage`
-- `dbus` (`dbus-run-session`)
-- A `greeter` system user
+Install everything below on the machine where greetd will run. Each list covers build tools and libraries, plus **greetd**, **Cage**, and **D-Bus** (used by `noctalia-greeter-session`). You still need your desktop sessions separately (niri, Hyprland, and so on).
 
-Build tools:
+### Arch
 
-- Meson + Ninja
-- C++20 compiler
-- `pkg-config`
-- `just` (optional, but recommended)
-
-Build-time libraries (pkg-config names):
-
-- `wayland-client`, `wayland-protocols`
-- `xkbcommon`
-- `freetype2`, `fontconfig`
-- `cairo`, `cairo-ft`, `pango`, `pangocairo`, `pangoft2`
-- `librsvg-2.0`
-- `glib-2.0`, `gobject-2.0`, `gio-2.0`
-- `egl` / `glesv2` / `wayland-egl` (or `epoxy` fallback)
-- `libwebp`
-
----
-
-## 🚀 Getting Started
-
-### 1) Build
-
-```bash
-meson setup build
-meson compile -C build
+```sh
+sudo pacman -S meson gcc just \
+  greetd cage dbus polkit \
+  wayland wayland-protocols \
+  libglvnd freetype2 fontconfig \
+  cairo pango \
+  libxkbcommon glib2 \
+  libwebp librsvg
 ```
 
-or:
+### Fedora
 
-```bash
+```sh
+sudo dnf install meson gcc-c++ just \
+  greetd cage dbus polkit \
+  wayland-devel wayland-protocols-devel \
+  libEGL-devel mesa-libGLES-devel \
+  freetype-devel fontconfig-devel \
+  cairo-devel pango-devel \
+  libxkbcommon-devel glib2-devel \
+  libwebp-devel librsvg2-devel
+```
+
+### Debian / Ubuntu
+
+```sh
+sudo apt install meson g++ just \
+  greetd cage dbus policykit-1 \
+  libwayland-dev wayland-protocols \
+  libegl-dev libgles-dev \
+  libfreetype-dev libfontconfig-dev \
+  libcairo2-dev libpango1.0-dev \
+  libxkbcommon-dev libglib2.0-dev \
+  libwebp-dev librsvg2-dev
+```
+
+### Void Linux
+
+```sh
+sudo xbps-install meson ninja pkg-config git \
+  greetd cage dbus polkit \
+  wayland-devel wayland-protocols libepoxy-devel \
+  MesaLib-devel libglvnd-devel cairo-devel \
+  pango-devel fontconfig-devel freetype-devel \
+  libxkbcommon-devel libwebp-devel librsvg-devel
+```
+
+Vendored dependencies, with no system package needed: `nlohmann/json`, `stb`, and `Wuffs`.
+
+`libwebp` handles WebP wallpapers when syncing appearance from the shell. Wuffs handles other raster image formats.
+
+On Void Linux, `libepoxy-devel` is used when EGL/GLES pkg-config modules are not available.
+
+## Building and installing
+
+Requires [just](https://github.com/casey/just) and [meson](https://mesonbuild.com/).
+
+#### Release build
+
+```sh
+just configure-release
+just build-release
+sudo meson install -C build-release
+sudo ./scripts/setup_greeter_system.sh
+```
+
+Pass a prefix when configuring to install somewhere other than `/usr/local`:
+
+```sh
+meson setup build-release --prefix="$HOME/.local" --buildtype=release --reconfigure
+just build-release
+sudo meson install -C build-release
+sudo ./scripts/setup_greeter_system.sh
+```
+
+#### Debug build
+
+```sh
 just build
+sudo just install
 ```
 
-### 2) Install
+`just install` runs the same system setup scripts after Meson install.
 
-```bash
-just install
+Meson installs the greeter binary, session launcher, assets, and polkit policy:
+
+```text
+/usr/local/bin/noctalia-greeter
+/usr/local/bin/noctalia-greeter-session
+/usr/local/bin/noctalia-greeter-apply-appearance
+/usr/local/share/noctalia-greeter/assets/...
 ```
 
-This installs the greeter binaries, session launcher, polkit policy, and assets, then runs system setup:
+The greeter needs the shipped `assets/` tree at runtime. Copying only the `noctalia-greeter` binary is not enough.
 
-- `scripts/setup_greetd_pam.sh`
-- `scripts/setup_greeter_system.sh`
+## Setting up greetd
 
-### 3) Configure greetd
-
-Add this to `/etc/greetd/config.toml`:
+After install, point greetd at the session wrapper (path matches your prefix):
 
 ```toml
 [default_session]
@@ -84,178 +145,84 @@ command = "/usr/local/bin/noctalia-greeter-session"
 user = "greeter"
 ```
 
-Optional default session (tuigreet-style `--cmd`); must match a Wayland session **Name** from the picker:
+Use the `user` value that matches your greetd config. `just install` / `setup_greeter_system.sh` reads greetd’s config and prepares `/var/lib/noctalia-greeter/` for that account.
+
+Optional default session (must match a name from the session picker, e.g. `niri`):
 
 ```toml
 command = "/usr/local/bin/noctalia-greeter-session -- --session niri"
 ```
 
-If your install prefix is different, use the installed path for `noctalia-greeter-session`.
+List valid session names:
 
-### 4) Restart greetd
-
-```bash
-sudo systemctl restart greetd
-# or
-sudo sv restart greetd
-```
-
----
-
-## Packaging
-
-Meson installs the following (paths use your `prefix`, commonly `/usr/local`):
-
-| Artifact | Install location | Role |
-|----------|------------------|------|
-| `noctalia-greeter` | `bindir` | Login UI (Wayland client under Cage) |
-| `noctalia-greeter-session` | `bindir` | greetd session command (`cage` + greeter) |
-| `noctalia-greeter-apply-appearance` | `bindir` | Root helper for shell -> greeter appearance sync |
-| `assets/` | `share/noctalia-greeter/assets` | Fonts, icons, etc. |
-| `org.noctalia.greeter.apply-appearance.policy` | `share/polkit-1/actions` | polkit rule for the sync helper |
-
-**Runtime paths**:
-
-- `/var/lib/noctalia-greeter/`: synced appearance (`appearance.json`, `wallpaper.*`) and `greeter.conf` (session/scheme prefs; see below)
-- `/var/log/noctalia-greeter.log`, `/var/lib/noctalia-greeter/greeter.log`: logs (`just setup-log-dir`)
-
-**Environment overrides** (optional):
-
-- `NOCTALIA_GREETER_STATE_DIR`: synced appearance directory (default `/var/lib/noctalia-greeter`)
-- `GREETER_USER`: greeter account for setup/logs only
-- `NOCTALIA_GREETER_ASSETS_DIR`: asset root override
-
-### Appearance sync (Noctalia Shell v5)
-
-Appearance sync is only supported with **[Noctalia Shell v5](https://github.com/noctalia-dev/noctalia-shell/tree/v5)** (the `v5` branch). Older shell releases do not include the settings control or staging flow.
-
-From **Settings -> Shell -> Security -> Noctalia Greeter -> Sync Now**, the shell:
-
-1. Stages `appearance.json` (and a wallpaper file when needed) under the user’s `$XDG_RUNTIME_DIR/noctalia-greeter-sync/`
-2. Runs `pkexec noctalia-greeter-apply-appearance <staging-dir>` (admin prompt via polkit)
-3. Installs into `/var/lib/noctalia-greeter/` as root-owned, world-readable files (`0755` dir, `0644` data). No greetd user lookup.
-
-The greeter reads `appearance.json` on startup and adds a **Synced** entry to the color-scheme picker (built-in palettes keep solid backgrounds). When synced data is present, **Synced** is the default scheme. Session and scheme preferences live in `/var/lib/noctalia-greeter/greeter.conf` (see below). **Both packages must be installed** (shell v5 + greeter + polkit policy). After syncing, restart greetd or log out once to see the shell wallpaper and palette.
-
-### `greeter.conf`
-
-Simple `key = value` file (`#` comments). Values must match a discovered session **Name** (`.desktop` `Name=`, same as the picker label) and a listed scheme name.
-
-| Key | Set by | Purpose |
-|-----|--------|---------|
-| `greeter_user` | install setup | greetd account (logs); not used at runtime for sync |
-| `default_session` | you (config or `--session` CLI) | default session on the picker when the greeter starts |
-| `session` | greeter UI | last session used (picker or last successful login) |
-| `scheme` | greeter UI | last color scheme picked |
-
-**Initial session** on startup: `--session` / `--cmd` → `default_session` → `session` (last used) → first discovered session.
-
-Example:
-
-```ini
-greeter_user=greetd
-default_session="niri"
-session="Hyprland"
-scheme="Synced"
-```
-
-Opens with **niri** selected. If the user picks Hyprland, only `session` is updated; `default_session` stays **niri** for the next login. Without `default_session` or `--session`, the greeter uses `session` (last used).
-
-If last-used never seems to stick, check that `default_session` is not set (it always wins over `session`), that `session=` in `greeter.conf` updates after login (`noctalia-greeter sessions` for exact **Name** spelling), and greeter logs for `failed to save greeter.conf`.
-
-List available session names (for `default_session` / `--session`):
-
-```bash
+```sh
 noctalia-greeter sessions
 ```
 
-`just install` runs `setup_greeter_system.sh`, which calls `noctalia-greeter-apply-appearance --setup-system` to create `greeter.conf` and give the greetd user write access so UI changes persist. Appearance sync does not depend on `greeter_user`.
+Restart greetd:
 
-Manual test of the helper (as root), after staging a directory:
-
-```bash
-sudo ./build/noctalia-greeter-apply-appearance /run/user/1000/noctalia-greeter-sync
+```sh
+sudo systemctl restart greetd
 ```
 
----
+On runit:
+
+```sh
+sudo sv restart greetd
+```
+
+Create log files once if needed:
+
+```sh
+just setup-log-dir
+```
+
+Logs: `/var/log/noctalia-greeter.log` and `/var/lib/noctalia-greeter/greeter.log`.
+
+## Matching Noctalia Shell
+
+With [Noctalia Shell v5](https://github.com/noctalia-dev/noctalia-shell/tree/v5) installed, open **Settings → Shell → Security → Noctalia Greeter → Sync Now**. The shell copies your wallpaper and palette to the greeter (admin prompt via polkit). After syncing, log out or restart greetd to see the changes on the login screen.
+
+The greeter adds a **Synced** color scheme when sync data is present. Session and scheme choices you make on the login screen are remembered in `/var/lib/noctalia-greeter/greeter.conf`.
+
+Admin-only keys in `greeter.conf` (set by you, not the UI):
+
+- `default_session` - session selected when the greeter opens (overrides last-used unless you pass `--session` on the command line)
+- `greeter_user` - greetd account name (setup/logging)
+
+The greeter updates `session` and `scheme` when you change them in the UI.
 
 ## Keyboard
 
-The greeter is fully operable without a pointer.
+The greeter works without a mouse.
 
 | Key | Action |
 |-----|--------|
-| `Tab` / `Shift+Tab` | Move focus forward / backward through the focus ring (works from inside the password field too) |
-| `↑` / `↓` | Move focus, or move the highlight when a dropdown menu is open |
-| `Enter` | Submit the password / activate the focused control / confirm the menu highlight |
-| `Space` | Activate the focused control (non-text controls) |
-| `Esc` | Close an open menu, or leave the password step |
-| `F3` | Open / close the **session** picker from anywhere |
-| `F7` | Open / close the **color scheme** picker from anywhere |
-
----
+| `Tab` / `Shift+Tab` | Move focus |
+| `↑` / `↓` | Move focus, or move in an open menu |
+| `Enter` | Submit password / activate / confirm menu |
+| `Space` | Activate focused control |
+| `Esc` | Close menu or leave password step |
+| `F3` | Session picker |
+| `F7` | Color scheme picker |
 
 ## Troubleshooting
 
-- **Blank screen / greeter does not start.** Check the logs at `/var/log/noctalia-greeter.log` and `/var/lib/noctalia-greeter/greeter.log` (run `just setup-log-dir` once if they are missing). The greeter logs its version and the build id at startup.
-- **`WAYLAND_DISPLAY is not set`.** The greeter must run under a Wayland compositor; greetd launches it via `noctalia-greeter-session` (Cage). Verify your greetd `command` points at that script.
-- **Session or scheme preference ignored.** Values in `greeter.conf` must match a discovered session **Name** (`noctalia-greeter sessions`) and a listed scheme. Unrecognized keys and malformed lines are now skipped with a warning in the log (with the offending line number) instead of failing silently.
-- **Appearance sync not applied.** Confirm both Noctalia Shell v5 and the polkit policy are installed, then restart greetd or log out once. See [Appearance sync](#appearance-sync-noctalia-shell-v5).
+- **Blank screen** - Check `/var/log/noctalia-greeter.log` and `/var/lib/noctalia-greeter/greeter.log`. Run `just setup-log-dir` if they are missing.
+- **`WAYLAND_DISPLAY is not set`** - greetd must use `noctalia-greeter-session` (it starts Cage). Fix `command` in `/etc/greetd/config.toml`.
+- **Wrong session on startup** - If `default_session` is set in `greeter.conf`, it wins over last-used `session`. Run `noctalia-greeter sessions` for exact **Name** spelling.
+- **Synced look missing** - Install shell v5, greeter, and the polkit policy; sync again; restart greetd or log out once.
 
----
+Stuck display over SSH:
 
-## Development
-
-Run locally under Cage:
-
-```bash
-just run-local
-```
-
-Run inside an existing Wayland session:
-
-```bash
-just run-niri
-```
-
-To force single-monitor mode for debugging, use Cage with `-m last`:
-
-```bash
-dbus-run-session cage -s -m last -- ./build/noctalia-greeter
-```
-
-AddressSanitizer:
-
-```bash
-just run-cage-asan
-```
-
-Recovery helper:
-
-```bash
+```sh
 just recover
 ```
 
----
+## Contributing
 
-## Scope
+We welcome contributions of any size - bug fixes, new features, documentation improvements!
 
-Noctalia Greeter is a **display/login greeter** for greetd. It handles user/session selection and authentication UI.
+## License
 
-It is **not** a desktop shell or compositor replacement.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome: fixes, polish, docs, or UX improvements.
-
-- Open an issue for bugs and regressions
-- Open a PR for improvements
-
----
-
-## 📄 License
-
-MIT License.
-
+Distributed under the MIT License. See [LICENSE](LICENSE) for details.
