@@ -6,11 +6,11 @@
   pkg-config,
   wayland-scanner,
   makeWrapper,
-  cage,
-  wlr-randr,
+  # Greeter (client Wayland)
   wayland,
   wayland-protocols,
   libGL,
+  libglvnd,
   freetype,
   fontconfig,
   cairo,
@@ -19,6 +19,10 @@
   libwebp,
   glib,
   librsvg,
+  # Compositor (wlroots)
+  wlroots_0_20,
+  # Runtime session
+  polkit,
 }: let
   inherit (builtins) head match readFile;
   version = head (match ".*version: '([^']+)'.*" (readFile ../meson.build));
@@ -30,11 +34,19 @@ in
     postPatch = ''
       sed -i "s/'-march=native', '-mtune=native',//" meson.build
     '';
-    nativeBuildInputs = [meson ninja pkg-config wayland-scanner makeWrapper];
+    nativeBuildInputs = [
+      meson
+      ninja
+      pkg-config
+      wayland-scanner
+      makeWrapper
+    ];
     buildInputs = [
+      # Greeter client
       wayland
       wayland-protocols
       libGL
+      libglvnd
       freetype
       fontconfig
       cairo
@@ -43,13 +55,13 @@ in
       libwebp
       glib
       librsvg
+      # Compositor
+      wlroots_0_20
     ];
     mesonFlags = ["--buildtype=release"];
     postInstall = ''
-      wrapProgram $out/bin/noctalia-greeter \
-        --prefix PATH : ${lib.makeBinPath [cage wlr-randr]}
       wrapProgram $out/bin/noctalia-greeter-session \
-        --prefix PATH : ${lib.makeBinPath [cage wlr-randr]}
+        --prefix PATH : ${lib.makeBinPath [polkit]}
     '';
     meta = with lib; {
       description = "A minimal login greeter for greetd that matches the look and feel of Noctalia Shell.";
