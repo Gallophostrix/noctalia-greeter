@@ -30,7 +30,7 @@ public:
 
   void requestLayout();
   void requestRedraw();
-  void matchPrimaryOutputSize();
+  void matchPrimaryOutputSize(bool force = false);
 
   // Immediate layout + render + swap (shell Surface::renderNow / render).
   void renderNow();

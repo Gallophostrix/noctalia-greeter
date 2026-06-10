@@ -574,11 +574,11 @@ WaylandClient::combinedLogicalSize() const noexcept {
 
 std::optional<std::pair<std::uint32_t, std::uint32_t>>
 WaylandClient::targetLogicalSize() const noexcept {
-  if (needsOutputViewport()) {
-    return combinedLogicalSize();
-  }
   if (hasResolvedPreferredOutput()) {
     return preferredLogicalSize();
+  }
+  if (needsOutputViewport()) {
+    return combinedLogicalSize();
   }
   return primaryLogicalSize();
 }

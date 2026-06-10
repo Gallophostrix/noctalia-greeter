@@ -112,8 +112,8 @@ void GreeterWindow::requestRedraw() {
   renderNow();
 }
 
-void GreeterWindow::matchPrimaryOutputSize() {
-  if (m_lastToplevelWidth > 0 && m_lastToplevelHeight > 0) {
+void GreeterWindow::matchPrimaryOutputSize(bool force) {
+  if (!force && m_lastToplevelWidth > 0 && m_lastToplevelHeight > 0) {
     return;
   }
 

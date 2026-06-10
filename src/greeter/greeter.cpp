@@ -101,7 +101,7 @@ bool Greeter::initialize(WaylandClient &client) {
     applyConfiguredOutput(*m_client, configured);
     syncUiScale();
     if (m_window != nullptr) {
-      m_window->matchPrimaryOutputSize();
+      m_window->matchPrimaryOutputSize(true);
     }
     if (m_surface != nullptr) {
       syncOutputViewport(*m_client, *m_surface);
